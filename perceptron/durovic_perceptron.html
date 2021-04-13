@@ -1,0 +1,254 @@
+<html>
+
+<head>
+    <style>
+        .btn {
+            border-radius: 5px;
+            color: #0099CC;
+            background: transparent;
+            border: 2px solid #0099CC;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 15;
+            font-weight: bold
+        }
+
+        .btn:hover {
+            background-color: #008CBA;
+            color: white;
+        }
+
+        .btn:active {
+            box-shadow: 0 5px #666;
+            transform: translateY(4px);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/addons/p5.dom.min.js"></script>
+    <script>
+        // divide grid to yellow and blue group 
+        function divideGrid(x) {
+            return 0.3 * x * 0.1; 
+        }
+
+        class Point {
+            constructor(coor_x, coor_y) {
+                this.x = coor_x || random(-1, 1);
+                this.y = coor_y || random(-1, 1);
+                this.bias = 1;
+                let lineY = divideGrid(this.x);
+                if (this.y <= lineY) {
+                    this.label = -1;
+                } else {
+                    this.label = 1;
+                }
+            }
+
+            // point coordinates
+            pX() {
+                return map(this.x, -1, 1, 0, width);
+            }
+
+            pY() {
+                return map(this.y, -1, 1, height, 0);
+            }
+
+            // draw point on the grid
+            show() {
+                stroke(0);
+                fill(0);
+
+                // if above - yellow
+                if (this.label == 1) {
+                    fill(255, 255, 0);
+                // else blue
+                } else {
+                    fill(0, 0, 255);
+                }
+
+                let px = this.pX();
+                let py = this.pY();
+                ellipse(px, py, 9, 9);
+            }
+        }
+
+        class Perceptron {
+            constructor(learningRate = 0.01) {
+                this.weights = [];
+                this.learningRate = learningRate;
+                this.error = 0;
+                this.accuracy = 0;
+                this.iterations = 0;
+                this.correctGuesses = 0;
+                for (let i = 0; i < 3; i++) {
+                    // w0 w1 w2 
+                    this.weights.push(random(-1, 1));
+                }
+            }
+
+            predict(inputs) {
+                let wSum = 0;
+                for (let i in this.weights) {
+                    // + (x * w0)
+                    // + (y * w1)
+                    // + (bias * w2)
+                    wSum += inputs[i] * this.weights[i];
+                }
+                // activation Function output
+                return wSum < 0 ? -1 : 1;
+            }
+
+            train(inputs, target) {
+                // wSum = guess = (w0 * x) + (w1 * y) + (w2 * bias)
+                let guess = this.predict(inputs);
+                // target = label = -1 || 1
+                // error = (-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)
+                this.error = target - guess;
+
+                for (let i in this.weights) {
+                    // w0 = [(-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)] * x * LR
+                    // w1 = [(-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)] * y * LR
+                    // w2 = [(-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)] * bias * LR
+                    this.weights[i] += this.error * inputs[i] * this.learningRate;
+                }
+                this.iterations++;
+
+                this.learningRate =
+                this.iterations > 350
+                    ? this.iterations > 900
+                    ? this.iterations > 2500
+                        ? 0.0005
+                        : 0.001
+                    : 0.005
+                    : this.learningRate;
+
+                if (this.error == 0) {
+                    this.correctGuesses++;
+                }
+
+                this.accuracy = (this.correctGuesses / this.iterations) * 100;
+                console.log("iteration:", this.iterations, ", error:", this.error);
+            }
+
+            // calculate red line to divide yellow and blue group
+            divideGroup(x) {
+                let w0 = this.weights[0];
+                let w1 = this.weights[1];
+                let w2 = this.weights[2];
+
+                return -w2 / w1 - (w0 / w1) * x;
+            }
+        }
+
+        var button;
+        let points = [];
+        let neuron;
+        let trainingIndex = 0;
+        let noWrongGuesses = true;
+        let trainingInterval;
+        let iterations;
+        let isTraining = false;
+
+        function setup() {
+            for (let i = 0; i < 200; i++) {
+                points.push(new Point());
+            }
+
+            neuron = new Perceptron(0.01);
+            let nextBtn = (button = createButton("Next Training Iteration"));
+            button.position(600, 250);
+            button.mousePressed(nextIteration);
+            let trainBtn = (button = createButton("Train Continously"));
+            button.position(600, 350);
+            button.mousePressed(startTraining);
+            let stopBtn = (button = createButton("Pause Training"));
+            nextBtn.class("btn");
+            trainBtn.class("btn");
+            stopBtn.class("btn");
+            button.position(600, 450);
+            button.mousePressed(pauseTraining);
+            iterations = createDiv();
+            iterations.style("font-size", "32");
+            iterations.position(600, 10);
+
+            createCanvas(500, 500);
+            strokeWeight(10);
+
+            stroke(255, 0, 0);
+            let p1 = new Point(-1, neuron.divideGroup(-1));
+            let p2 = new Point(1, neuron.divideGroup(1));
+            line(p2.pX(), p2.pY(), p1.pX(), p1.pY());
+
+            iterations.html(
+                `<p>Iterations: ${neuron.iterations}</p><p>Accuracy: ${
+                neuron.accuracy
+                }%</p><p>Learning Rate: ${neuron.learningRate}</p>`
+            );
+        }
+
+        function draw() {
+            
+            background(255);
+            
+            for (let point of points) {
+                point.show();
+            }
+        }
+
+        function startTraining() {
+            if (!isTraining) {
+                isTraining = true;
+                trainingInterval = setInterval(nextIteration, 100);
+            }
+        }
+
+        function nextIteration() {
+            clear();
+
+            training = points[trainingIndex];
+            let inputs = [training.x, training.y, training.bias];
+            let target = training.label;
+
+            let guess = neuron.predict(inputs);
+            if (guess == target) {
+                fill(0, 255, 0);
+            } else {
+                fill(255, 0, 0);
+            }
+            ellipse(training.pX(), training.pY(), 16, 16);
+
+            neuron.train(inputs, target);
+            // training.show();
+            trainingIndex++;
+
+            if (trainingIndex == points.length) {
+                trainingIndex = 0;
+            }
+
+            iterations.html(
+                `<p>Iterations: ${neuron.iterations}</p><p>Accuracy: ${
+                neuron.accuracy
+                }%</p><p>Learning Rate: ${neuron.learningRate}</p>`
+            );
+
+            stroke(255, 0, 0);
+            let p1 = new Point(-1, neuron.divideGroup(-1));
+            let p2 = new Point(1, neuron.divideGroup(1));
+            line(p2.pX(), p2.pY(), p1.pX(), p1.pY());
+
+        }
+
+        function pauseTraining() {
+            clearInterval(trainingInterval);
+            isTraining = false;
+            console.log("Training Paused");
+            alert("Training Paused");
+        }
+    </script>
+
+</head>
+
+<body>
+</body>
+
+</html>
