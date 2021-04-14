@@ -3,40 +3,40 @@
 <head>
     <style>
         .btn {
-            border-radius: 5px;
-            color: #0099CC;
             background: transparent;
-            border: 2px solid #0099CC;
-            border-radius: 6px;
+            border: 2px solid #00AFFF;
+            border-radius: 5px;
             padding: 10px;
-            font-size: 15;
-            font-weight: bold
+            color: #00AFFF;
+            font-weight: bold;
+            font-size: 16;
         }
 
         .btn:hover {
-            background-color: #008CBA;
-            color: white;
+            background-color: #00AFFF;
+            color:#FFF;
+            cursor: pointer;
         }
 
         .btn:active {
-            box-shadow: 0 5px #666;
-            transform: translateY(4px);
+            box-shadow: 0 5px #0999FF;
+            transform: translateY(3px);
+        }
+
+        .p5Canvas {
+            border: 1px #444 solid;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/p5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/addons/p5.dom.min.js"></script>
     <script>
-        // divide grid to yellow and blue group 
-        function divideGrid(x) {
-            return 0.3 * x * 0.1; 
-        }
 
         class Point {
             constructor(coor_x, coor_y) {
                 this.x = coor_x || random(-1, 1);
                 this.y = coor_y || random(-1, 1);
                 this.bias = 1;
-                let lineY = divideGrid(this.x);
+                let lineY = 0.3 * this.x * 0.1;
                 if (this.y <= lineY) {
                     this.label = -1;
                 } else {
@@ -79,7 +79,7 @@
                 this.error = 0;
                 this.accuracy = 0;
                 this.iterations = 0;
-                this.correctGuesses = 0;
+                this.correctEstimate = 0;
                 for (let i = 0; i < 3; i++) {
                     // w0 w1 w2 
                     this.weights.push(random(-1, 1));
@@ -98,12 +98,12 @@
                 return wSum < 0 ? -1 : 1;
             }
 
-            train(inputs, target) {
-                // wSum = guess = (w0 * x) + (w1 * y) + (w2 * bias)
-                let guess = this.predict(inputs);
+            iterate(inputs, target) {
+                // wSum = estimation = (w0 * x) + (w1 * y) + (w2 * bias)
+                let estimation = this.predict(inputs);
                 // target = label = -1 || 1
                 // error = (-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)
-                this.error = target - guess;
+                this.error = target - estimation;
 
                 for (let i in this.weights) {
                     // w0 = [(-1 || 1) - (w0 * x) + (w1 * y) + (w2 * bias)] * x * LR
@@ -114,8 +114,8 @@
                 this.iterations++;
 
                 this.learningRate =
-                this.iterations > 350
-                    ? this.iterations > 900
+                this.iterations > 400
+                    ? this.iterations > 1000
                     ? this.iterations > 2500
                         ? 0.0005
                         : 0.001
@@ -123,10 +123,10 @@
                     : this.learningRate;
 
                 if (this.error == 0) {
-                    this.correctGuesses++;
+                    this.correctEstimate++;
                 }
 
-                this.accuracy = (this.correctGuesses / this.iterations) * 100;
+                this.accuracy = (this.correctEstimate / this.iterations) * 100;
                 console.log("iteration:", this.iterations, ", error:", this.error);
             }
 
@@ -141,94 +141,103 @@
         }
 
         var button;
+        let iterate = false;
         let points = [];
         let neuron;
-        let trainingIndex = 0;
-        let noWrongGuesses = true;
-        let trainingInterval;
+        let iterationIndex = 0;
+        let iterationInterval;
         let iterations;
-        let isTraining = false;
+        let noError = 0;
+        let numberOfPoints = 10;
 
         function setup() {
-            for (let i = 0; i < 200; i++) {
+            for (let i = 0; i < numberOfPoints; i++) {
                 points.push(new Point());
             }
 
-            neuron = new Perceptron(0.01);
-            let nextBtn = (button = createButton("Next Training Iteration"));
-            button.position(600, 250);
+            // buttons
+            let singleStep = (button = createButton("Next iteration"));
+            button.position(600, 340);
             button.mousePressed(nextIteration);
-            let trainBtn = (button = createButton("Train Continously"));
-            button.position(600, 350);
-            button.mousePressed(startTraining);
-            let stopBtn = (button = createButton("Pause Training"));
-            nextBtn.class("btn");
-            trainBtn.class("btn");
-            stopBtn.class("btn");
-            button.position(600, 450);
-            button.mousePressed(pauseTraining);
+            let start = (button = createButton("Start / Continue"));
+            button.position(600, 400);
+            button.mousePressed(startIterate);
+            let stop = (button = createButton("Stop / Pause"));
+            singleStep.class("btn");
+            start.class("btn");
+            stop.class("btn");
+            button.position(600, 460);
+            button.mousePressed(stopIterate);
+
+            // chart labels
             iterations = createDiv();
-            iterations.style("font-size", "32");
-            iterations.position(600, 10);
+            iterations.style("font-size", "24");
+            iterations.position(600, 15);
 
+            neuron = new Perceptron(0.01);
+
+            // Grid
             createCanvas(500, 500);
-            strokeWeight(10);
+            background(255);
 
+            // random initialization of red line
             stroke(255, 0, 0);
             let p1 = new Point(-1, neuron.divideGroup(-1));
             let p2 = new Point(1, neuron.divideGroup(1));
             line(p2.pX(), p2.pY(), p1.pX(), p1.pY());
 
+            // chart info
             iterations.html(
-                `<p>Iterations: ${neuron.iterations}</p><p>Accuracy: ${
-                neuron.accuracy
-                }%</p><p>Learning Rate: ${neuron.learningRate}</p>`
+                `
+                <p>Learning Rate: ${neuron.learningRate}</p>
+                <p>Iterations: ${neuron.iterations}</p>
+                <p>Accuracy: ${neuron.accuracy} %</p>
+                `
             );
         }
 
         function draw() {
-            
-            background(255);
-            
             for (let point of points) {
                 point.show();
             }
         }
 
-        function startTraining() {
-            if (!isTraining) {
-                isTraining = true;
-                trainingInterval = setInterval(nextIteration, 100);
+        function startIterate() {
+            if (!iterate) {
+                iterate = true;
+                iterationInterval = setInterval(nextIteration, 100);
             }
         }
 
         function nextIteration() {
             clear();
 
-            training = points[trainingIndex];
-            let inputs = [training.x, training.y, training.bias];
-            let target = training.label;
+            currentPoint = points[iterationIndex];
+            let inputs = [currentPoint.x, currentPoint.y, currentPoint.bias];
+            let target = currentPoint.label;
 
-            let guess = neuron.predict(inputs);
-            if (guess == target) {
+            let estimation = neuron.predict(inputs);
+            if (estimation == target) {
                 fill(0, 255, 0);
             } else {
                 fill(255, 0, 0);
             }
-            ellipse(training.pX(), training.pY(), 16, 16);
+            ellipse(currentPoint.pX(), currentPoint.pY(), 17, 17);
 
-            neuron.train(inputs, target);
-            // training.show();
-            trainingIndex++;
+            neuron.iterate(inputs, target);
+            iterationIndex++;
 
-            if (trainingIndex == points.length) {
-                trainingIndex = 0;
+            if (iterationIndex == points.length) {
+                iterationIndex = 0;
             }
 
+            // chart info reloaded
             iterations.html(
-                `<p>Iterations: ${neuron.iterations}</p><p>Accuracy: ${
-                neuron.accuracy
-                }%</p><p>Learning Rate: ${neuron.learningRate}</p>`
+                `
+                <p>Learning Rate: ${neuron.learningRate}</p>
+                <p>Iterations: ${neuron.iterations}</p>
+                <p>Accuracy: ${neuron.accuracy} %</p>
+                `
             );
 
             stroke(255, 0, 0);
@@ -236,13 +245,29 @@
             let p2 = new Point(1, neuron.divideGroup(1));
             line(p2.pX(), p2.pY(), p1.pX(), p1.pY());
 
+            if (neuron.error == 0) {
+                noError++;
+            } else {
+                noError = 0;
+            }
+
+            if (noError >= points.length) {
+                return finish();
+            }
+
         }
 
-        function pauseTraining() {
-            clearInterval(trainingInterval);
-            isTraining = false;
-            console.log("Training Paused");
-            alert("Training Paused");
+        function stopIterate() {
+            clearInterval(iterationInterval);
+            iterate = false;
+            console.log("Iteration is stopped.");
+        }
+
+        function finish() {
+            clearInterval(iterationInterval);
+            iterate = false;
+            console.log("Job is finished!");
+            alert("Finish!");
         }
     </script>
 
