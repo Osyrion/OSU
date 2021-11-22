@@ -2,7 +2,7 @@
 
 CREATE DATABASE vydap_projekt CHARACTER SET utf8;
 
-CREATE TABLE vydap_projekt.predmet (
+CREATE TABLE vydap_projekt.predmety (
     zkratka_predmetu varchar(5) PRIMARY KEY,
     nazev varchar(50),
     pocet_kreditu smallint(6),
